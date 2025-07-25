@@ -1,0 +1,411 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>GreenLight - Veeam Security Report</title>
+    <style>
+        body {
+            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+            margin: 0;
+            padding: 20px;
+            background-color: #f5f5f5;
+            line-height: 1.6;
+        }
+        .container {
+            max-width: 1400px;
+            margin: 0 auto;
+            background: white;
+            border-radius: 8px;
+            box-shadow: 0 2px 10px rgba(0,0,0,0.1);
+            overflow: hidden;
+        }
+        .header {
+            background: linear-gradient(135deg, #00a86b, #008f5b);
+            color: white;
+            padding: 30px;
+            text-align: center;
+        }
+        .header h1 {
+            margin: 0;
+            font-size: 2.5em;
+            font-weight: 300;
+        }
+        .header p {
+            margin: 10px 0 0 0;
+            opacity: 0.9;
+        }
+        .score-section {
+            padding: 30px;
+            text-align: center;
+            border-bottom: 1px solid #eee;
+        }
+        .score-circle {
+            width: 150px;
+            height: 150px;
+            border-radius: 50%;
+            margin: 0 auto 20px;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            font-size: 2.5em;
+            font-weight: bold;
+            color: white;
+            position: relative;
+        }
+        .score-excellent { background: linear-gradient(135deg, #4CAF50, #45a049); }
+        .score-good { background: linear-gradient(135deg, #FFC107, #ffb300); }
+        .score-poor { background: linear-gradient(135deg, #F44336, #d32f2f); }
+        .score-percentage {
+            position: absolute;
+            bottom: -30px;
+            left: 50%;
+            transform: translateX(-50%);
+            font-size: 0.4em;
+            opacity: 0.8;
+        }
+        .stats {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
+            gap: 20px;
+            padding: 30px;
+            border-bottom: 1px solid #eee;
+        }
+        .stat-card {
+            text-align: center;
+            padding: 20px;
+            background: #f8f9fa;
+            border-radius: 8px;
+        }
+        .stat-number {
+            font-size: 2em;
+            font-weight: bold;
+            color: #00a86b;
+        }
+        .stat-label {
+            color: #666;
+            margin-top: 5px;
+        }
+        .checks-section {
+            padding: 30px;
+        }
+        .section-title {
+            font-size: 1.5em;
+            margin-bottom: 20px;
+            color: #333;
+            border-bottom: 2px solid #00a86b;
+            padding-bottom: 10px;
+        }
+        .checks-grid {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(350px, 1fr));
+            gap: 20px;
+            margin-top: 20px;
+        }
+        .check-card {
+            border: 1px solid #ddd;
+            border-radius: 8px;
+            padding: 20px;
+            background: white;
+            box-shadow: 0 2px 4px rgba(0,0,0,0.1);
+            transition: transform 0.2s;
+        }
+        .check-card:hover {
+            transform: translateY(-2px);
+            box-shadow: 0 4px 8px rgba(0,0,0,0.15);
+        }
+        .check-header {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            margin-bottom: 10px;
+        }
+        .check-name {
+            font-weight: bold;
+            font-size: 1.1em;
+            color: #333;
+        }
+        .check-score {
+            background: #00a86b;
+            color: white;
+            padding: 4px 12px;
+            border-radius: 20px;
+            font-size: 0.9em;
+            font-weight: bold;
+        }
+        .check-status {
+            padding: 4px 12px;
+            border-radius: 20px;
+            font-size: 0.8em;
+            font-weight: bold;
+            text-transform: uppercase;
+            margin-bottom: 10px;
+            display: inline-block;
+        }
+        .status-pass { background: #d4edda; color: #155724; }
+        .status-warning { background: #fff3cd; color: #856404; }
+        .status-fail { background: #f8d7da; color: #721c24; }
+        .check-description {
+            color: #666;
+            margin-top: 10px;
+            font-size: 0.95em;
+        }
+        .api-checks {
+            background: linear-gradient(to right, #f8f9fa, #ffffff);
+        }
+        .powershell-checks {
+            background: linear-gradient(to right, #e3f2fd, #ffffff);
+        }
+        .compliance-card {
+            grid-column: 1 / -1;
+            background: linear-gradient(135deg, #1e3c72, #2a5298);
+            color: white;
+            border: none;
+        }
+        .compliance-card .check-name {
+            color: white;
+            font-size: 1.3em;
+        }
+        .compliance-card .check-score {
+            background: rgba(255,255,255,0.2);
+            color: white;
+        }
+        .compliance-card .check-description {
+            color: rgba(255,255,255,0.9);
+        }
+        .recommendations {
+            padding: 30px;
+            background: #f8f9fa;
+        }
+        .recommendations h2 {
+            margin-top: 0;
+            color: #333;
+        }
+        .recommendations ul {
+            list-style: none;
+            padding: 0;
+        }
+        .recommendations li {
+            background: white;
+            padding: 15px;
+            margin: 10px 0;
+            border-radius: 5px;
+            border-left: 4px solid #00a86b;
+            box-shadow: 0 1px 3px rgba(0,0,0,0.1);
+            font-size: 0.95em;
+        }
+        .critical-rec {
+            border-left-color: #F44336;
+            background: #ffebee;
+        }
+        .warning-rec {
+            border-left-color: #FF9800;
+            background: #fff8e1;
+        }
+        .info-rec {
+            border-left-color: #2196F3;
+            background: #e3f2fd;
+        }
+        .footer {
+            text-align: center;
+            padding: 20px;
+            color: #666;
+            font-size: 0.9em;
+        }
+        .category-summary {
+            margin: 15px 0;
+            padding: 15px;
+            background: rgba(255,255,255,0.1);
+            border-radius: 5px;
+            font-family: monospace;
+            font-size: 0.9em;
+        }
+        .powershell-badge {
+            background: #0078d4;
+            color: white;
+            padding: 2px 8px;
+            border-radius: 12px;
+            font-size: 0.7em;
+            margin-left: 8px;
+        }
+        .api-badge {
+            background: #00a86b;
+            color: white;
+            padding: 2px 8px;
+            border-radius: 12px;
+            font-size: 0.7em;
+            margin-left: 8px;
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <div class="header">
+            <h1>🛡️ GreenLight</h1>
+            <p>Comprehensive Veeam Backup & Replication Security Assessment</p>
+        </div>
+
+                <div class="score-section">
+            {{$percentage := 0.0}}
+            {{if gt .MaxScore 0}}
+                {{$percentage = mul (div .Score .MaxScore) 100.0}}
+            {{end}}
+            
+            {{$scoreClass := "score-poor"}}
+            {{if ge $percentage 80}}{{$scoreClass = "score-excellent"}}{{end}}
+            {{if and (ge $percentage 60) (lt $percentage 80)}}{{$scoreClass = "score-good"}}{{end}}
+            
+            <div class="score-circle {{$scoreClass}}">
+                {{.Score}}/{{.MaxScore}}
+                <div class="score-percentage">{{printf "%.1f%%" $percentage}}</div>
+            </div>
+            <h2>Overall Security Score</h2>
+            <p>
+                {{if ge $percentage 80}}🎉 Excellent security configuration!{{end}}
+                {{if and (ge $percentage 60) (lt $percentage 80)}}⚠️ Good security posture with room for improvement.{{end}}
+                {{if lt $percentage 60}}🚨 Security improvements needed immediately.{{end}}
+            </p>
+        </div>
+
+        <div class="stats">
+            <div class="stat-card">
+                <div class="stat-number">{{.JobsCount}}</div>
+                <div class="stat-label">Backup Jobs</div>
+            </div>
+            <div class="stat-card">
+                <div class="stat-number">{{.ReposCount}}</div>
+                <div class="stat-label">Repositories</div>
+            </div>
+            <div class="stat-card">
+                <div class="stat-number">{{len .SecurityChecks}}</div>
+                <div class="stat-label">Security Checks</div>
+            </div>
+            <div class="stat-card">
+                <div class="stat-number">
+                    {{$psChecks := 0}}
+                    {{range $key, $check := .SecurityChecks}}
+                        {{if or (eq $key "database_security") (eq $key "service_security") (eq $key "powershell_repository_analysis") (eq $key "job_security_analysis") (eq $key "audit_&_logging") (eq $key "veeam_security_&_compliance")}}
+                            {{$psChecks = add $psChecks 1}}
+                        {{end}}
+                    {{end}}
+                    {{$psChecks}}
+                </div>
+                <div class="stat-label">PowerShell Checks</div>
+            </div>
+        </div>
+
+        <!-- API-Based Security Checks -->
+        <div class="checks-section api-checks">
+            <h2 class="section-title">
+                🌐 API-Based Security Checks
+                <span class="api-badge">REST API</span>
+            </h2>
+            <div class="checks-grid">
+                {{range $key, $check := .SecurityChecks}}
+                    {{if and (ne $key "database_security") (ne $key "service_security") (ne $key "powershell_repository_analysis") (ne $key "job_security_analysis") (ne $key "audit_&_logging") (ne $key "veeam_security_&_compliance")}}
+                    <div class="check-card">
+                        <div class="check-header">
+                            <div class="check-name">{{$check.Name}}</div>
+                            <div class="check-score">{{$check.Score}}/{{$check.MaxScore}}</div>
+                        </div>
+                        <div class="check-status status-{{$check.Status}}">{{$check.Status}}</div>
+                        <div class="check-description">{{$check.Description}}</div>
+                    </div>
+                    {{end}}
+                {{end}}
+            </div>
+        </div>
+
+        <!-- PowerShell-Based Security Checks -->
+        <div class="checks-section powershell-checks">
+            <h2 class="section-title">
+                ⚡ Enhanced PowerShell Security Analysis
+                <span class="powershell-badge">PowerShell</span>
+            </h2>
+            <div class="checks-grid">
+                {{range $key, $check := .SecurityChecks}}
+                    {{if eq $key "veeam_security_&_compliance"}}
+                    <div class="check-card compliance-card">
+                        <div class="check-header">
+                            <div class="check-name">🔒 {{$check.Name}}</div>
+                            <div class="check-score">{{$check.Score}}/{{$check.MaxScore}}</div>
+                        </div>
+                        <div class="check-status status-{{$check.Status}}">{{$check.Status}}</div>
+                        <div class="check-description">{{$check.Description}}</div>
+                    </div>
+                    {{else if or (eq $key "database_security") (eq $key "service_security") (eq $key "powershell_repository_analysis") (eq $key "job_security_analysis") (eq $key "audit_&_logging")}}
+                    <div class="check-card">
+                        <div class="check-header">
+                            <div class="check-name">
+                                {{if eq $key "database_security"}}🗄️{{end}}
+                                {{if eq $key "service_security"}}⚙️{{end}}
+                                {{if eq $key "powershell_repository_analysis"}}💾{{end}}
+                                {{if eq $key "job_security_analysis"}}🔐{{end}}
+                                {{if eq $key "audit_&_logging"}}📊{{end}}
+                                {{$check.Name}}
+                            </div>
+                            <div class="check-score">{{$check.Score}}/{{$check.MaxScore}}</div>
+                        </div>
+                        <div class="check-status status-{{$check.Status}}">{{$check.Status}}</div>
+                        <div class="check-description">{{$check.Description}}</div>
+                    </div>
+                    {{end}}
+                {{end}}
+            </div>
+        </div>
+
+        {{if .Recommendations}}
+        <div class="recommendations">
+            <h2>📋 Security Recommendations & Findings</h2>
+            <ul>
+                {{range .Recommendations}}
+                <li class="{{if contains . "CRITICAL"}}critical-rec{{else if contains . "⚠"}}warning-rec{{else if contains . "🚨"}}critical-rec{{else if contains . "==="}}info-rec{{else}}{{end}}">
+                    {{.}}
+                </li>
+                {{end}}
+            </ul>
+        </div>
+        {{end}}
+
+        <div class="footer">
+            <p>
+                <strong>GreenLight v2.0</strong> - Comprehensive Veeam Security Assessment Tool<br>
+                Generated on {{.Score}} of {{.MaxScore}} possible points 
+                {{if gt .MaxScore 100}}
+                    <br><em>Enhanced with PowerShell deep analysis and Veeam Security & Compliance Analyzer integration</em>
+                {{end}}
+            </p>
+        </div>
+    </div>
+
+    <script>
+        // Add some interactivity
+        document.addEventListener('DOMContentLoaded', function() {
+            // Highlight critical items
+            const criticalItems = document.querySelectorAll('.critical-rec');
+            criticalItems.forEach(item => {
+                item.style.animation = 'pulse 2s infinite';
+            });
+            
+            // Add CSS for pulse animation
+            const style = document.createElement('style');
+            style.textContent = `
+                @keyframes pulse {
+                    0% { opacity: 1; }
+                    50% { opacity: 0.7; }
+                    100% { opacity: 1; }
+                }
+            `;
+            document.head.appendChild(style);
+            
+            // Add click handlers for expandable sections
+            const checkCards = document.querySelectorAll('.check-card');
+            checkCards.forEach(card => {
+                card.addEventListener('click', function() {
+                    this.style.transform = this.style.transform ? '' : 'scale(1.02)';
+                });
+            });
+        });
+    </script>
+</body>
+</html>
