@@ -35,6 +35,43 @@
             margin: 10px 0 0 0;
             opacity: 0.9;
         }
+        .server-info-section {
+            padding: 30px;
+            background: linear-gradient(135deg, #f8f9fa, #e9ecef);
+            border-bottom: 1px solid #dee2e6;
+        }
+        .server-info-grid {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(250px, 1fr));
+            gap: 20px;
+            margin-top: 20px;
+        }
+        .server-info-card {
+            background: white;
+            padding: 20px;
+            border-radius: 8px;
+            box-shadow: 0 2px 4px rgba(0,0,0,0.1);
+            border-left: 4px solid #00a86b;
+            transition: transform 0.2s ease;
+        }
+        .server-info-card:hover {
+            transform: translateY(-2px);
+            box-shadow: 0 4px 8px rgba(0,0,0,0.15);
+        }
+        .info-label {
+            font-size: 0.85em;
+            color: #6c757d;
+            text-transform: uppercase;
+            letter-spacing: 0.5px;
+            margin-bottom: 8px;
+            font-weight: 600;
+        }
+        .info-value {
+            font-size: 1.1em;
+            color: #212529;
+            font-weight: 500;
+            word-break: break-all;
+        }
         .score-section {
             padding: 30px;
             text-align: center;
@@ -245,7 +282,34 @@
             <p>Comprehensive Veeam Backup & Replication Security Assessment</p>
         </div>
 
-                <div class="score-section">
+        <!-- Veeam Server Information Section -->
+        <div class="server-info-section">
+            <h2 class="section-title">🖥️ Veeam Server Information</h2>
+            <div class="server-info-grid">
+                <div class="server-info-card">
+                    <div class="info-label">Server Name</div>
+                    <div class="info-value">{{if .ServerInfo.serverName}}{{.ServerInfo.serverName}}{{else if .ServerInfo.name}}{{.ServerInfo.name}}{{else}}Not Available{{end}}</div>
+                </div>
+                <div class="server-info-card">
+                    <div class="info-label">Build Version</div>
+                    <div class="info-value">{{if .ServerInfo.buildVersion}}{{.ServerInfo.buildVersion}}{{else if .ServerInfo.version}}{{.ServerInfo.version}}{{else if .ServerInfo.productVersion}}{{.ServerInfo.productVersion}}{{else}}Not Available{{end}}</div>
+                </div>
+                <div class="server-info-card">
+                    <div class="info-label">Database Vendor</div>
+                    <div class="info-value">{{if .ServerInfo.databaseVendor}}{{.ServerInfo.databaseVendor}}{{else}}Not Available{{end}}</div>
+                </div>
+                <div class="server-info-card">
+                    <div class="info-label">Database Version</div>
+                    <div class="info-value">{{if .ServerInfo.sqlServerVersion}}{{.ServerInfo.sqlServerVersion}}{{else}}Not Available{{end}}</div>
+                </div>
+                <div class="server-info-card">
+                    <div class="info-label">VBR Server ID</div>
+                    <div class="info-value">{{if .ServerInfo.vbrId}}{{.ServerInfo.vbrId}}{{else if .ServerInfo.instanceUid}}{{.ServerInfo.instanceUid}}{{else if .ServerInfo.id}}{{.ServerInfo.id}}{{else}}Not Available{{end}}</div>
+                </div>
+            </div>
+        </div>
+
+        <div class="score-section">
             {{$percentage := 0.0}}
             {{if gt .MaxScore 0}}
                 {{$percentage = mul (div .Score .MaxScore) 100.0}}
@@ -269,26 +333,39 @@
 
         <div class="stats">
             <div class="stat-card">
-                <div class="stat-number">{{.JobsCount}}</div>
-                <div class="stat-label">Backup Jobs</div>
+                <div class="stat-number">{{.Score}}</div>
+                <div class="stat-label">Security Score</div>
             </div>
             <div class="stat-card">
-                <div class="stat-number">{{.ReposCount}}</div>
-                <div class="stat-label">Repositories</div>
+                <div class="stat-number">{{len .FeatureChecks}}</div>
+                <div class="stat-label">Feature Checks</div>
             </div>
             <div class="stat-card">
-                <div class="stat-number">{{len .SecurityChecks}}</div>
-                <div class="stat-label">Security Checks</div>
+                <div class="stat-number">
+                    {{$issues := 0}}
+                    {{range $key, $check := .SecurityChecks}}
+                        {{if eq $check.Status "fail"}}{{$issues = add $issues 1}}{{end}}
+                    {{end}}
+                    {{range $key, $check := .FeatureChecks}}
+                        {{if eq $check.Status "fail"}}{{$issues = add $issues 1}}{{end}}
+                    {{end}}
+                    {{$issues}}
+                </div>
+                <div class="stat-label">Security Issues</div>
             </div>
             <div class="stat-card">
                 <div class="stat-number">
                     {{$psChecks := 0}}
+                    {{$hasPowerShell := false}}
                     {{range $key, $check := .SecurityChecks}}
                         {{if or (eq $key "database_security") (eq $key "service_security") (eq $key "powershell_repository_analysis") (eq $key "job_security_analysis") (eq $key "audit_&_logging") (eq $key "veeam_security_&_compliance")}}
-                            {{$psChecks = add $psChecks 1}}
+                            {{if ne $check.Description "PowerShell not available"}}
+                                {{$psChecks = add $psChecks 1}}
+                                {{$hasPowerShell = true}}
+                            {{end}}
                         {{end}}
                     {{end}}
-                    {{$psChecks}}
+                    {{if $hasPowerShell}}Available{{else}}Not Available{{end}}
                 </div>
                 <div class="stat-label">PowerShell Checks</div>
             </div>
@@ -302,10 +379,54 @@
             </h2>
             <div class="checks-grid">
                 {{range $key, $check := .SecurityChecks}}
-                    {{if and (ne $key "database_security") (ne $key "service_security") (ne $key "powershell_repository_analysis") (ne $key "job_security_analysis") (ne $key "audit_&_logging") (ne $key "veeam_security_&_compliance")}}
+                    {{if eq $key "321_compliance"}}
+                    <div class="check-card compliance-card">
+                        <div class="check-header">
+                            <div class="check-name">🎯 {{$check.Name}}</div>
+                            <div class="check-score">{{$check.Score}}/{{$check.MaxScore}}</div>
+                        </div>
+                        <div class="check-status status-{{$check.Status}}">{{$check.Status}}</div>
+                        <div class="check-description">{{$check.Description}}</div>
+                    </div>
+                    {{else if and (ne $key "database_security") (ne $key "service_security") (ne $key "powershell_repository_analysis") (ne $key "job_security_analysis") (ne $key "audit_&_logging") (ne $key "veeam_security_&_compliance")}}
                     <div class="check-card">
                         <div class="check-header">
                             <div class="check-name">{{$check.Name}}</div>
+                            <div class="check-score">{{$check.Score}}/{{$check.MaxScore}}</div>
+                        </div>
+                        <div class="check-status status-{{$check.Status}}">{{$check.Status}}</div>
+                        <div class="check-description">{{$check.Description}}</div>
+                    </div>
+                    {{end}}
+                {{end}}
+            </div>
+        </div>
+
+        <!-- Feature Checks Section -->
+        <div class="checks-section feature-checks">
+            <h2 class="section-title">
+                🚀 Advanced Feature Analysis
+                <span class="api-badge">Features</span>
+            </h2>
+            <div class="checks-grid">
+                {{range $key, $check := .FeatureChecks}}
+                    {{if eq $key "321_compliance"}}
+                    <div class="check-card compliance-card">
+                        <div class="check-header">
+                            <div class="check-name">🎯 {{$check.Name}}</div>
+                            <div class="check-score">{{$check.Score}}/{{$check.MaxScore}}</div>
+                        </div>
+                        <div class="check-status status-{{$check.Status}}">{{$check.Status}}</div>
+                        <div class="check-description">{{$check.Description}}</div>
+                    </div>
+                    {{else}}
+                    <div class="check-card">
+                        <div class="check-header">
+                            <div class="check-name">
+                                {{if eq $key "surebackup"}}✅{{end}}
+                                {{if eq $key "suspicious_activity"}}🕵️{{end}}
+                                {{$check.Name}}
+                            </div>
                             <div class="check-score">{{$check.Score}}/{{$check.MaxScore}}</div>
                         </div>
                         <div class="check-status status-{{$check.Status}}">{{$check.Status}}</div>
@@ -322,6 +443,14 @@
                 ⚡ Enhanced PowerShell Security Analysis
                 <span class="powershell-badge">PowerShell</span>
             </h2>
+            {{$hasPowerShellChecks := false}}
+            {{range $key, $check := .SecurityChecks}}
+                {{if and (or (eq $key "database_security") (eq $key "service_security") (eq $key "powershell_repository_analysis") (eq $key "job_security_analysis") (eq $key "audit_&_logging") (eq $key "veeam_security_&_compliance")) (ne $check.Description "PowerShell not available")}}
+                    {{$hasPowerShellChecks = true}}
+                {{end}}
+            {{end}}
+            
+            {{if $hasPowerShellChecks}}
             <div class="checks-grid">
                 {{range $key, $check := .SecurityChecks}}
                     {{if eq $key "veeam_security_&_compliance"}}
@@ -332,6 +461,13 @@
                         </div>
                         <div class="check-status status-{{$check.Status}}">{{$check.Status}}</div>
                         <div class="check-description">{{$check.Description}}</div>
+                        {{if $check.CanRemediate}}
+                        <div class="remediation-section">
+                            <button class="fix-btn" onclick="showRemediationScript({{$check.RemediationID}})">
+                                🔧 Generate Fix Script
+                            </button>
+                        </div>
+                        {{end}}
                     </div>
                     {{else if or (eq $key "database_security") (eq $key "service_security") (eq $key "powershell_repository_analysis") (eq $key "job_security_analysis") (eq $key "audit_&_logging")}}
                     <div class="check-card">
@@ -352,15 +488,35 @@
                     {{end}}
                 {{end}}
             </div>
+            {{else}}
+            <div style="text-align: center; padding: 40px; background: rgba(255,255,255,0.8); border-radius: 8px; margin-top: 20px;">
+                <h3 style="color: #666; margin-bottom: 15px;">💻 PowerShell Analysis Not Available</h3>
+                <p style="color: #888; margin-bottom: 20px;">PowerShell-based security checks are only available when running on a Windows Veeam server.</p>
+                <div style="background: #f0f4f8; padding: 20px; border-radius: 6px; font-size: 0.9em; color: #555;">
+                    <strong>Enhanced checks available on Windows:</strong><br>
+                    🗄️ Database Security Analysis<br>
+                    ⚙️ Service Configuration Review<br>
+                    💾 Advanced Repository Analysis<br>
+                    🔐 Job Security Assessment<br>
+                    📊 Audit & Logging Configuration<br>
+                    🔒 Veeam Security & Compliance Analysis
+                </div>
+            </div>
+            {{end}}
         </div>
 
         {{if .Recommendations}}
         <div class="recommendations">
             <h2>📋 Security Recommendations & Findings</h2>
             <ul>
-                {{range .Recommendations}}
-                <li class="{{if contains . "CRITICAL"}}critical-rec{{else if contains . "⚠"}}warning-rec{{else if contains . "🚨"}}critical-rec{{else if contains . "==="}}info-rec{{else}}{{end}}">
-                    {{.}}
+                {{range $index, $rec := .Recommendations}}
+                <li class="{{if contains $rec "CRITICAL"}}critical-rec{{else if contains $rec "⚠"}}warning-rec{{else if contains $rec "🚨"}}critical-rec{{else if contains $rec "==="}}info-rec{{else}}{{end}}">
+                    <div class="recommendation-with-fix" data-rec-id="{{$index}}">
+                        <span class="rec-text">{{$rec}}</span>
+                        <button class="fix-btn-inline" style="display: none;" onclick="extractAndShowFix('{{$rec}}')">
+                            🔧 Generate Fix
+                        </button>
+                    </div>
                 </li>
                 {{end}}
             </ul>
@@ -405,7 +561,319 @@
                     this.style.transform = this.style.transform ? '' : 'scale(1.02)';
                 });
             });
+
+            // Check each recommendation for remediation possibilities
+            checkRemediationAvailability();
         });
+
+        // Function to check all recommendations for available remediations
+        function checkRemediationAvailability() {
+            const remediationPatterns = {
+                // Exact compliance check names from PowerShell
+                'RemoteDesktopServiceDisabled': 1,
+                'RemoteRegistryDisabled': 2,
+                'WinRmServiceDisabled': 3,
+                'WindowsFirewallEnabled': 4,
+                'WDigestNotStorePasswordsInMemory': 5,
+                'WebProxyAutoDiscoveryDisabled': 6,
+                'OutdatedSslAndTlsDisabled': 7,
+                'WindowsScriptHostDisabled': 8,
+                'SMB1ProtocolDisabled': 9,
+                'LLMNRDisabled': 10,
+                'CSmbSigningAndEncryptionEnabled': 11,
+                'ManualLinuxHostAuthentication': 19,
+                'ViProxyTrafficEncrypted': 21,
+                'PostgreSqlUseRecommendedSettings': 32,
+                'LsassProtectedProcess': 34,
+                'NetBiosDisabled': 35,
+                // User-friendly patterns - comprehensive coverage
+                'Remote Desktop': 1,
+                'TermService': 1,
+                'Remote Registry': 2,
+                'RemoteRegistry': 2,
+                'Windows Remote Management': 3,
+                'WinRM': 3,
+                'Windows Firewall': 4,
+                'WDigest': 5,
+                'credentials caching': 5,
+                'Web Proxy Auto-Discovery': 6,
+                'WinHttpAutoProxySvc': 6,
+                'SSL': 7,
+                'TLS': 7,
+                'deprecated versions': 7,
+                'Windows Script Host': 8,
+                'script host': 8,
+                'SMBv1': 9,
+                'SMB1': 9,
+                'LLMNR': 10,
+                'Link-Local Multicast': 10,
+                'SMBv3': 11,
+                'SMB signing': 11,
+                'SMB encryption': 11,
+                'Linux': 19,
+                'trusted automatically': 19,
+                'unknown Linux': 19,
+                'proxy traffic': 21,
+                'host to proxy': 21,
+                'traffic encryption': 21,
+                'Network transport mode': 21,
+                'PostgreSQL': 32,
+                'recommended settings': 32,
+                'LSASS': 34,
+                'Local Security Authority': 34,
+                'protected process': 34,
+                'NetBIOS': 35,
+                'network interfaces': 35
+            };
+
+            // Check each recommendation
+            document.querySelectorAll('.recommendation-with-fix').forEach(recDiv => {
+                const recText = recDiv.querySelector('.rec-text').textContent;
+                const fixBtn = recDiv.querySelector('.fix-btn-inline');
+                
+                // Clean up the recommendation text - remove PowerShell suffix if present
+                let cleanText = recText.replace(' (can be fixed via PowerShell)', '');
+                
+                // Check if this recommendation matches any remediation pattern
+                for (const [pattern, id] of Object.entries(remediationPatterns)) {
+                    if (cleanText.toLowerCase().includes(pattern.toLowerCase())) {
+                        fixBtn.style.display = 'inline-block';
+                        break;
+                    }
+                }
+            });
+        }
+
+        // Remediation functionality
+        window.showRemediationScript = function(remediationId) {
+            fetch('/api/remediate', {
+                method: 'POST',
+                headers: {
+                    'Content-Type': 'application/json',
+                },
+                body: JSON.stringify({ id: remediationId })
+            })
+            .then(response => {
+                const script = response.headers.get('X-PowerShell-Script');
+                return response.json().then(data => ({ data, script }));
+            })
+            .then(({ data, script }) => {
+                if (data.success && script) {
+                    showScriptModal(script, data.message);
+                } else {
+                    alert('Error: ' + data.message);
+                }
+            })
+            .catch(error => {
+                console.error('Error:', error);
+                alert('Failed to generate remediation script');
+            });
+        };
+
+        function showScriptModal(script, message) {
+            // Create modal overlay
+            const overlay = document.createElement('div');
+            overlay.style.cssText = `
+                position: fixed;
+                top: 0;
+                left: 0;
+                width: 100%;
+                height: 100%;
+                background: rgba(0,0,0,0.8);
+                z-index: 10000;
+                display: flex;
+                justify-content: center;
+                align-items: center;
+            `;
+
+            // Create modal content
+            const modal = document.createElement('div');
+            modal.style.cssText = `
+                background: white;
+                border-radius: 8px;
+                padding: 30px;
+                max-width: 800px;
+                max-height: 80%;
+                overflow-y: auto;
+                box-shadow: 0 4px 20px rgba(0,0,0,0.3);
+            `;
+
+            modal.innerHTML = `
+                <h3 style="margin: 0 0 20px 0; color: #333;">🔧 PowerShell Remediation Script</h3>
+                <p style="color: #666; margin-bottom: 20px;">${message}</p>
+                <div style="background: #f8f9fa; border: 1px solid #dee2e6; border-radius: 4px; padding: 15px; margin-bottom: 20px;">
+                    <h4 style="margin: 0 0 10px 0; color: #495057;">Instructions:</h4>
+                    <ol style="margin: 0; padding-left: 20px; color: #6c757d;">
+                        <li>Copy the PowerShell script below</li>
+                        <li>Run PowerShell as Administrator on your Veeam server</li>
+                        <li>Paste and execute the script</li>
+                        <li>Refresh this report to see the updated status</li>
+                    </ol>
+                </div>
+                <textarea readonly style="width: 100%; height: 300px; font-family: monospace; font-size: 12px; background: #f8f9fa; border: 1px solid #dee2e6; border-radius: 4px; padding: 15px; resize: vertical;">${script}</textarea>
+                <div style="text-align: right; margin-top: 20px;">
+                    <button onclick="copyScriptToClipboard()" style="background: #007bff; color: white; border: none; padding: 10px 20px; border-radius: 4px; margin-right: 10px; cursor: pointer;">📋 Copy Script</button>
+                    <button onclick="closeModal()" style="background: #6c757d; color: white; border: none; padding: 10px 20px; border-radius: 4px; cursor: pointer;">Close</button>
+                </div>
+            `;
+
+            overlay.appendChild(modal);
+            document.body.appendChild(overlay);
+
+            // Store script for copying
+            window.currentScript = script;
+
+            // Close modal functions
+            window.closeModal = function() {
+                document.body.removeChild(overlay);
+            };
+
+            window.copyScriptToClipboard = function() {
+                navigator.clipboard.writeText(window.currentScript).then(() => {
+                    alert('Script copied to clipboard!');
+                }).catch(() => {
+                    // Fallback for older browsers
+                    const textArea = document.createElement('textarea');
+                    textArea.value = window.currentScript;
+                    document.body.appendChild(textArea);
+                    textArea.select();
+                    document.execCommand('copy');
+                    document.body.removeChild(textArea);
+                    alert('Script copied to clipboard!');
+                });
+            };
+
+            // Close on overlay click
+            overlay.addEventListener('click', function(e) {
+                if (e.target === overlay) {
+                    window.closeModal();
+                }
+            });
+        }
+
+        // Function to extract remediation info from recommendation text
+        window.extractAndShowFix = function(recommendationText) {
+            // Map recommendation patterns to remediation IDs
+            // Include both exact compliance check names and user-friendly patterns
+            const remediationPatterns = {
+                // Exact compliance check names from PowerShell
+                'RemoteDesktopServiceDisabled': 1,
+                'RemoteRegistryDisabled': 2,
+                'WinRmServiceDisabled': 3,
+                'WindowsFirewallEnabled': 4,
+                'WDigestNotStorePasswordsInMemory': 5,
+                'WebProxyAutoDiscoveryDisabled': 6,
+                'OutdatedSslAndTlsDisabled': 7,
+                'WindowsScriptHostDisabled': 8,
+                'SMB1ProtocolDisabled': 9,
+                'LLMNRDisabled': 10,
+                'CSmbSigningAndEncryptionEnabled': 11,
+                'ManualLinuxHostAuthentication': 19,
+                'ViProxyTrafficEncrypted': 21,
+                'PostgreSqlUseRecommendedSettings': 32,
+                'LsassProtectedProcess': 34,
+                'NetBiosDisabled': 35,
+                // User-friendly patterns - comprehensive coverage
+                'Remote Desktop': 1,
+                'TermService': 1,
+                'Remote Registry': 2,
+                'RemoteRegistry': 2,
+                'Windows Remote Management': 3,
+                'WinRM': 3,
+                'Windows Firewall': 4,
+                'WDigest': 5,
+                'credentials caching': 5,
+                'Web Proxy Auto-Discovery': 6,
+                'WinHttpAutoProxySvc': 6,
+                'SSL': 7,
+                'TLS': 7,
+                'deprecated versions': 7,
+                'Windows Script Host': 8,
+                'script host': 8,
+                'SMBv1': 9,
+                'SMB1': 9,
+                'LLMNR': 10,
+                'Link-Local Multicast': 10,
+                'SMBv3': 11,
+                'SMB signing': 11,
+                'SMB encryption': 11,
+                'Linux': 19,
+                'trusted automatically': 19,
+                'unknown Linux': 19,
+                'proxy traffic': 21,
+                'host to proxy': 21,
+                'traffic encryption': 21,
+                'Network transport mode': 21,
+                'PostgreSQL': 32,
+                'recommended settings': 32,
+                'LSASS': 34,
+                'Local Security Authority': 34,
+                'protected process': 34,
+                'NetBIOS': 35,
+                'network interfaces': 35
+            };
+
+            // Clean up the recommendation text - remove PowerShell suffix if present
+            let cleanText = recommendationText.replace(' (can be fixed via PowerShell)', '');
+
+            // Find matching remediation ID
+            let remediationId = 0;
+            for (const [pattern, id] of Object.entries(remediationPatterns)) {
+                if (cleanText.toLowerCase().includes(pattern.toLowerCase())) {
+                    remediationId = id;
+                    break;
+                }
+            }
+
+            if (remediationId > 0) {
+                showRemediationScript(remediationId);
+            } else {
+                alert('Unable to identify specific remediation script for this recommendation. Please check the PowerShell checks section for available fixes.');
+            }
+        };
+
+        // Add CSS for inline fix buttons
+        const inlineFixStyle = document.createElement('style');
+        inlineFixStyle.textContent = `
+            .recommendation-with-fix {
+                display: flex;
+                justify-content: space-between;
+                align-items: center;
+                gap: 15px;
+            }
+            .rec-text {
+                flex: 1;
+            }
+            .fix-btn-inline {
+                background: linear-gradient(135deg, #28a745, #20c997);
+                color: white;
+                border: none;
+                padding: 6px 12px;
+                border-radius: 4px;
+                font-size: 0.8em;
+                font-weight: 500;
+                cursor: pointer;
+                transition: all 0.3s ease;
+                box-shadow: 0 2px 4px rgba(40, 167, 69, 0.2);
+                white-space: nowrap;
+                flex-shrink: 0;
+            }
+            .fix-btn-inline:hover {
+                background: linear-gradient(135deg, #218838, #1a9e8a);
+                transform: translateY(-1px);
+                box-shadow: 0 4px 8px rgba(40, 167, 69, 0.3);
+            }
+            .fix-btn-inline:active {
+                transform: translateY(0);
+            }
+            .recommendations li {
+                margin-bottom: 10px;
+            }
+            .recommendations .recommendation-with-fix {
+                padding: 8px 0;
+            }
+        `;
+        document.head.appendChild(inlineFixStyle);
     </script>
 </body>
 </html>

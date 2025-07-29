@@ -4,6 +4,7 @@ import (
 	"embed"
 	"encoding/json"
 	"fmt"
+	"greenlight/api"
 	"greenlight/models"
 	"html/template"
 	"net/http"
@@ -17,10 +18,11 @@ var templatesFS embed.FS
 
 type Server struct {
 	Result models.CheckResult
+	Data   models.VeeamData
 }
 
-func NewServer(result models.CheckResult) *Server {
-	return &Server{Result: result}
+func NewServer(result models.CheckResult, data models.VeeamData) *Server {
+	return &Server{Result: result, Data: data}
 }
 
 func (s *Server) Start() error {
@@ -29,6 +31,8 @@ func (s *Server) Start() error {
 	r.HandleFunc("/", s.handleHome).Methods("GET")
 	r.HandleFunc("/report", s.handleReport).Methods("GET")
 	r.HandleFunc("/api/report", s.handleAPIReport).Methods("GET")
+	r.HandleFunc("/api/remediate", api.HandleRemediation).Methods("POST")
+	r.HandleFunc("/api/security-checks", api.HandleSecurityChecksInfo).Methods("GET")
 
 	fmt.Println("Serving dashboard at http://localhost:8080/report")
 	return http.ListenAndServe(":8080", r)
@@ -128,7 +132,15 @@ func (s *Server) handleReport(w http.ResponseWriter, r *http.Request) {
 	}
 
 	// Execute template - this will only write headers once
-	if err := tmpl.Execute(w, s.Result); err != nil {
+	templateData := struct {
+		models.CheckResult
+		ServerInfo map[string]interface{}
+	}{
+		CheckResult: s.Result,
+		ServerInfo:  s.Data.ServerInfo,
+	}
+
+	if err := tmpl.Execute(w, templateData); err != nil {
 		// Don't call http.Error here as headers may already be written
 		fmt.Printf("Template execution error: %v\n", err)
 		return

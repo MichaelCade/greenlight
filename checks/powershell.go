@@ -705,6 +705,65 @@ func checkAuditConfiguration(psData *models.PowerShellData) (int, []string, mode
 	}
 }
 
+// Helper function to map compliance check names to remediation IDs
+func getRemediationID(checkName string) int {
+	// Map Veeam compliance check names to remediation script IDs
+	// These correspond to the automated fixes available in the Veeam Security & Compliance Analyzer script
+	remediationMap := map[string]int{
+		// Automated remediation available (16 total)
+		"RemoteDesktopServiceDisabled":     1,  // Remote Desktop Services should be disabled
+		"RemoteRegistryDisabled":           2,  // Remote Registry service should be disabled
+		"WinRmServiceDisabled":             3,  // Windows Remote Management should be disabled
+		"WindowsFirewallEnabled":           4,  // Windows Firewall should be enabled
+		"WDigestNotStorePasswordsInMemory": 5,  // WDigest credentials caching should be disabled
+		"WebProxyAutoDiscoveryDisabled":    6,  // Web Proxy Auto-Discovery service should be disabled
+		"OutdatedSslAndTlsDisabled":        7,  // Deprecated versions of SSL and TLS should be disabled
+		"WindowsScriptHostDisabled":        8,  // Windows Script Host should be disabled
+		"SMB1ProtocolDisabled":             9,  // SMBv1 protocol should be disabled
+		"LLMNRDisabled":                    10, // Link-Local Multicast Name Resolution should be disabled
+		"CSmbSigningAndEncryptionEnabled":  11, // SMBv3 signing and encryption should be enabled
+		"ManualLinuxHostAuthentication":    19, // Unknown Linux servers should not be trusted automatically
+		"ViProxyTrafficEncrypted":          21, // Host to proxy traffic encryption should be enabled
+		"PostgreSqlUseRecommendedSettings": 32, // PostgreSQL server should be configured with recommended settings
+		"LsassProtectedProcess":            34, // LSASS should be set to run as a protected process
+		"NetBiosDisabled":                  35, // NetBIOS protocol should be disabled on all network interfaces
+
+		// Manual remediation required (19 items) - these return 0 to indicate no automation available
+		"MfaEnabledInBackupConsole":               0, // ID 12: MFA for the backup console should be enabled
+		"ImmutableOrOfflineMediaPresence":         0, // ID 13: Immutable or offline (air gapped) media should be used
+		"LossProtectionEnabled":                   0, // ID 14: Password loss protection should be enabled
+		"BackupServerInProductionDomain":          0, // ID 15: Backup server should not be a part of the production domain
+		"EmailNotificationsEnabled":               0, // ID 16: Email notifications should be enabled
+		"ContainBackupCopies":                     0, // ID 17: All backups should have at least one copy (3-2-1 rule)
+		"ReverseIncrementalInUse":                 0, // ID 18: Reverse incremental backup mode should be avoided
+		"ConfigurationBackupRepositoryNotLocal":   0, // ID 20: Configuration backup must not be stored on the backup server
+		"HardenedRepositoryNotVirtual":            0, // ID 22: Hardened repositories should not be hosted in virtual machines
+		"TrafficEncryptionEnabled":                0, // ID 23: Network traffic encryption should be enabled in the backup network
+		"LinuxServersUsingSSHKeys":                0, // ID 24: Linux servers should have password-based authentication disabled
+		"BackupServicesUnderLocalSystem":          0, // ID 25: Backup services should be running under the LocalSystem account
+		"ConfigurationBackupEnabledAndEncrypted":  0, // ID 26: Configuration backup should be enabled and use encryption
+		"PasswordsRotation":                       0, // ID 27: Credentials and encryption passwords should be rotated annually
+		"HardenedRepositorySshDisabled":           0, // ID 28: Hardened repositories should have the SSH Server disabled
+		"OsBucketsInComplianceMode":               0, // ID 29: S3 Object Lock in Governance mode does not provide true immutability
+		"JobsTargetingCloudRepositoriesEncrypted": 0, // ID 30: Backup jobs to cloud repositories should use encryption
+		"BackupServerUpToDate":                    0, // ID 31: Latest product updates should be installed
+		"HardenedRepositoryNotContainsNBDProxies": 0, // ID 33: Hardened repositories should not be used as backup proxy servers
+	}
+
+	if id, exists := remediationMap[checkName]; exists {
+		return id
+	}
+	return 0
+}
+
+// Helper function to get the first remediation ID from a list
+func getFirstRemediationID(remediableIssues []int) int {
+	if len(remediableIssues) > 0 {
+		return remediableIssues[0]
+	}
+	return 0
+}
+
 func checkVeeamCompliance(psData *models.PowerShellData) (int, []string, models.SecurityCheck) {
 	maxScore := 100
 	score := 0
@@ -713,7 +772,7 @@ func checkVeeamCompliance(psData *models.PowerShellData) (int, []string, models.
 	description := "Veeam Security & Compliance Analysis not available"
 
 	if errorMsg, hasError := psData.ComplianceReport["error"]; hasError {
-		description = fmt.Sprintf("Compliance check error: %v", errorMsg)
+		description := fmt.Sprintf("Compliance check error: %v", errorMsg)
 
 		// Provide manual security recommendations instead
 		recs = append(recs, "🔧 MANUAL SECURITY RECOMMENDATIONS:")
@@ -731,7 +790,6 @@ func checkVeeamCompliance(psData *models.PowerShellData) (int, []string, models.
 		// Give partial score for manual recommendations
 		score = 30
 		status = "warning"
-		description = "Manual security recommendations provided (Compliance Analyzer not available)"
 
 		return score, recs, models.SecurityCheck{
 			Name: "Veeam Security & Compliance", Score: score, MaxScore: maxScore,
@@ -747,16 +805,28 @@ func checkVeeamCompliance(psData *models.PowerShellData) (int, []string, models.
 		}
 	}
 
-	// Process compliance checks
+	// Process compliance checks and identify remediable issues
 	totalChecks := len(psData.ComplianceReport)
 	passedChecks := 0
+	remediableIssues := []int{} // Track which issues can be fixed via PowerShell
 
 	for key, value := range psData.ComplianceReport {
 		if statusStr, ok := value.(string); ok && statusStr == "Ok" {
 			passedChecks++
 			recs = append(recs, fmt.Sprintf("✓ %s", key))
+		} else {
+			// Check if this issue can be remediated via PowerShell
+			remediationID := getRemediationID(key)
+			if remediationID > 0 {
+				remediableIssues = append(remediableIssues, remediationID)
+				recs = append(recs, fmt.Sprintf("🔧 %s (can be fixed via PowerShell)", key))
+			} else {
+				recs = append(recs, fmt.Sprintf("⚠ %s (requires manual intervention)", key))
+			}
 		}
 	}
+
+	canRemediate := len(remediableIssues) > 0
 
 	if totalChecks > 0 {
 		percentage := float64(passedChecks) / float64(totalChecks) * 100
@@ -769,10 +839,16 @@ func checkVeeamCompliance(psData *models.PowerShellData) (int, []string, models.
 		}
 
 		description = fmt.Sprintf("Compliance: %.1f%% (%d/%d checks passed)", percentage, passedChecks, totalChecks)
+
+		if canRemediate {
+			description += fmt.Sprintf(" - %d issues can be auto-fixed", len(remediableIssues))
+		}
 	}
 
 	return score, recs, models.SecurityCheck{
 		Name: "Veeam Security & Compliance", Score: score, MaxScore: maxScore,
 		Status: status, Description: description,
+		CanRemediate:  canRemediate,
+		RemediationID: getFirstRemediationID(remediableIssues),
 	}
 }

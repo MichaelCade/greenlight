@@ -3,6 +3,11 @@ package models
 // VeeamData represents the data collected from Veeam API
 type VeeamData struct {
 	ServerInfo           map[string]interface{}   `json:"serverInfo"`
+	HealthInfo           map[string]interface{}   `json:"healthInfo"`
+	LicenseInfo          map[string]interface{}   `json:"licenseInfo"`
+	AuditItems           []interface{}            `json:"auditItems"`
+	Alarms               []interface{}            `json:"alarms"`
+	Sessions             []interface{}            `json:"sessions"`
 	Credentials          []interface{}            `json:"credentials"`
 	CloudCredentials     []interface{}            `json:"cloudCredentials"`
 	KMSServers           []interface{}            `json:"kmsServers"`
@@ -22,15 +27,18 @@ type CheckResult struct {
 	MaxScore        int                      `json:"maxScore"`
 	Recommendations []string                 `json:"recommendations"`
 	SecurityChecks  map[string]SecurityCheck `json:"securityChecks"`
+	FeatureChecks   map[string]SecurityCheck `json:"featureChecks"`
 }
 
 // SecurityCheck represents an individual security check result
 type SecurityCheck struct {
-	Name        string `json:"name"`
-	Score       int    `json:"score"`
-	MaxScore    int    `json:"maxScore"`
-	Status      string `json:"status"` // "pass", "warning", "fail"
-	Description string `json:"description"`
+	Name          string `json:"name"`
+	Score         int    `json:"score"`
+	MaxScore      int    `json:"maxScore"`
+	Status        string `json:"status"` // "pass", "warning", "fail"
+	Description   string `json:"description"`
+	CanRemediate  bool   `json:"canRemediate"`            // Whether this can be fixed via PowerShell
+	RemediationID int    `json:"remediationId,omitempty"` // ID for PowerShell remediation
 }
 
 type PowerShellData struct {

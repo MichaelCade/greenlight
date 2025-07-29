@@ -31,6 +31,25 @@ func CollectVeeamData(ctx context.Context, baseURL, username, password string, i
 
 	// Collect data from various endpoints
 	data.ServerInfo, _ = getServerInfo(baseURL, token, client)
+
+	// Get enhanced server information including database details
+	if serverInfo, err := getEnhancedServerInfo(baseURL, token, client); err == nil {
+		// Merge enhanced info with basic server info
+		if data.ServerInfo == nil {
+			data.ServerInfo = make(map[string]interface{})
+		}
+		for key, value := range serverInfo {
+			data.ServerInfo[key] = value
+		}
+	}
+
+	// Collect extended information for comprehensive analysis
+	data.HealthInfo, _ = GetVeeamServerHealth(baseURL, token, client)
+	data.LicenseInfo, _ = GetVeeamLicenseInfo(baseURL, token, client)
+	data.AuditItems, _ = GetVeeamAuditItems(baseURL, token, client)
+	data.Alarms, _ = GetVeeamAlarms(baseURL, token, client)
+	data.Sessions, _ = GetVeeamSessions(baseURL, token, client)
+
 	data.Credentials, _ = getCredentials(baseURL, token, client)
 	data.CloudCredentials, _ = getCloudCredentials(baseURL, token, client)
 	data.KMSServers, _ = getKMSServers(baseURL, token, client)
@@ -54,7 +73,8 @@ func authenticate(baseURL, username, password string, client *http.Client) (stri
 	}
 
 	req.Header.Add("Content-Type", "application/x-www-form-urlencoded")
-	req.Header.Add("x-api-version", "1.1-rev0")
+	req.Header.Add("x-api-version", "1.1-rev2")
+	req.Header.Add("accept", "application/json")
 
 	resp, err := client.Do(req)
 	if err != nil {
@@ -89,7 +109,8 @@ func getAPIList(url, token string, client *http.Client) ([]interface{}, error) {
 	}
 
 	req.Header.Add("Authorization", "Bearer "+token)
-	req.Header.Add("x-api-version", "1.1-rev0")
+	req.Header.Add("x-api-version", "1.1-rev2")
+	req.Header.Add("accept", "application/json")
 
 	resp, err := client.Do(req)
 	if err != nil {
@@ -124,7 +145,8 @@ func getAPIObject(url, token string, client *http.Client) (map[string]interface{
 	}
 
 	req.Header.Add("Authorization", "Bearer "+token)
-	req.Header.Add("x-api-version", "1.1-rev0")
+	req.Header.Add("x-api-version", "1.1-rev2")
+	req.Header.Add("accept", "application/json")
 
 	resp, err := client.Do(req)
 	if err != nil {
@@ -149,6 +171,50 @@ func getAPIObject(url, token string, client *http.Client) (map[string]interface{
 	return result, nil
 }
 
+// getEnhancedServerInfo collects detailed server information including database details
+func getEnhancedServerInfo(baseURL, token string, client *http.Client) (map[string]interface{}, error) {
+	enhancedInfo := make(map[string]interface{})
+
+	// Get basic server info
+	serverInfo, err := getAPIObject(fmt.Sprintf("%s/api/v1/serverInfo", baseURL), token, client)
+	if err != nil {
+		return enhancedInfo, err
+	}
+
+	// Extract server details from the response
+	if name, exists := serverInfo["name"]; exists {
+		enhancedInfo["serverName"] = name
+	}
+	if buildVersion, exists := serverInfo["buildVersion"]; exists {
+		enhancedInfo["buildVersion"] = buildVersion
+	}
+	if vbrId, exists := serverInfo["vbrId"]; exists {
+		enhancedInfo["vbrId"] = vbrId
+	}
+
+	// Extract database information
+	if databaseVendor, exists := serverInfo["databaseVendor"]; exists {
+		enhancedInfo["databaseVendor"] = databaseVendor
+	}
+	if sqlServerVersion, exists := serverInfo["sqlServerVersion"]; exists {
+		enhancedInfo["sqlServerVersion"] = sqlServerVersion
+	}
+	if sqlServerEdition, exists := serverInfo["sqlServerEdition"]; exists && sqlServerEdition != "" {
+		enhancedInfo["sqlServerEdition"] = sqlServerEdition
+	}
+
+	// Add additional database metadata if available
+	if databaseContentVersion, exists := serverInfo["databaseContentVersion"]; exists {
+		enhancedInfo["databaseContentVersion"] = databaseContentVersion
+	}
+	if databaseSchemaVersion, exists := serverInfo["databaseSchemaVersion"]; exists {
+		enhancedInfo["databaseSchemaVersion"] = databaseSchemaVersion
+	}
+
+	return enhancedInfo, nil
+}
+
+// getDatabaseInfo attempts to get database configuration details
 func getServerInfo(baseURL, token string, client *http.Client) (map[string]interface{}, error) {
 	return getAPIObject(fmt.Sprintf("%s/api/v1/serverInfo", baseURL), token, client)
 }

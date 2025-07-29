@@ -10,12 +10,44 @@ func checkEncryption(jobs []map[string]interface{}) (int, []string, models.Secur
 	score := 0
 	recs := []string{}
 	encryptedJobs := 0
+	encryptionDetails := []string{}
 
-	for _, job := range jobs {
-		if checkBoolField(job, "encryptionEnabled") ||
-			checkBoolField(job, "isEncrypted") ||
-			checkBoolField(job, "encrypted") {
+	for i, job := range jobs {
+		jobName := fmt.Sprintf("Job %d", i+1)
+		if name, exists := job["name"].(string); exists {
+			jobName = name
+		}
+
+		isEncrypted := false
+		encryptionMethod := "None"
+
+		// Check various encryption fields
+		if checkBoolField(job, "encryptionEnabled") {
+			isEncrypted = true
+			encryptionMethod = "Enabled"
+		} else if checkBoolField(job, "isEncrypted") {
+			isEncrypted = true
+			encryptionMethod = "Enabled"
+		} else if checkBoolField(job, "encrypted") {
+			isEncrypted = true
+			encryptionMethod = "Enabled"
+		}
+
+		// Check for specific encryption settings
+		if encSettings, exists := job["encryptionSettings"].(map[string]interface{}); exists {
+			if enabled, ok := encSettings["enabled"].(bool); ok && enabled {
+				isEncrypted = true
+				if algorithm, ok := encSettings["algorithm"].(string); ok {
+					encryptionMethod = fmt.Sprintf("Enabled (%s)", algorithm)
+				}
+			}
+		}
+
+		if isEncrypted {
 			encryptedJobs++
+			encryptionDetails = append(encryptionDetails, fmt.Sprintf("✅ %s: %s", jobName, encryptionMethod))
+		} else {
+			encryptionDetails = append(encryptionDetails, fmt.Sprintf("❌ %s: No encryption", jobName))
 		}
 	}
 
@@ -30,22 +62,27 @@ func checkEncryption(jobs []map[string]interface{}) (int, []string, models.Secur
 		if encryptionRatio >= 1.0 {
 			score = maxScore
 			status = "pass"
-			description = "All backup jobs have encryption enabled"
-			recs = append(recs, description)
+			description = fmt.Sprintf("All %d backup jobs have encryption enabled", len(jobs))
+			recs = append(recs, "🔒 All backup jobs properly encrypted")
 		} else if encryptionRatio >= 0.8 {
 			score = int(float64(maxScore) * 0.8)
 			status = "warning"
-			description = fmt.Sprintf("%.0f%% of backup jobs have encryption enabled", encryptionRatio*100)
-			recs = append(recs, description+". Consider encrypting all jobs for better security.")
+			description = fmt.Sprintf("%d of %d jobs (%.0f%%) have encryption enabled", encryptedJobs, len(jobs), encryptionRatio*100)
+			recs = append(recs, fmt.Sprintf("⚠️ %d jobs still need encryption enabled", len(jobs)-encryptedJobs))
 		} else if encryptionRatio >= 0.5 {
 			score = int(float64(maxScore) * 0.5)
 			status = "warning"
-			description = fmt.Sprintf("%.0f%% of backup jobs have encryption enabled", encryptionRatio*100)
-			recs = append(recs, description+". Increase encryption coverage for better protection.")
+			description = fmt.Sprintf("%d of %d jobs (%.0f%%) have encryption enabled", encryptedJobs, len(jobs), encryptionRatio*100)
+			recs = append(recs, fmt.Sprintf("🚨 URGENT: %d jobs without encryption - vulnerable to data theft", len(jobs)-encryptedJobs))
 		} else {
-			description = "Low encryption coverage detected"
-			recs = append(recs, "Low encryption coverage. Encrypt backup jobs for better security.")
+			description = fmt.Sprintf("Critical: Only %d of %d jobs encrypted", encryptedJobs, len(jobs))
+			recs = append(recs, fmt.Sprintf("🚨 CRITICAL: %d jobs completely unencrypted - immediate security risk", len(jobs)-encryptedJobs))
 		}
+
+		// Add detailed breakdown
+		recs = append(recs, "=== Encryption Status by Job ===")
+		recs = append(recs, encryptionDetails...)
+		recs = append(recs, "📋 Recommendation: Enable AES-256 encryption on all backup jobs")
 	}
 
 	return score, recs, models.SecurityCheck{

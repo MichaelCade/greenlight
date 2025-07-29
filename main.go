@@ -67,7 +67,7 @@ func main() {
 	}
 
 	// Start web server
-	server := web.NewServer(result)
+	server := web.NewServer(result, data)
 	if err := server.Start(); err != nil {
 		log.Fatalf("Failed to start web server: %v", err)
 	}

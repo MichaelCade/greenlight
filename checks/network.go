@@ -6,7 +6,7 @@ import (
 )
 
 func checkNetworkSecurity(proxies []interface{}) (int, []string, models.SecurityCheck) {
-	maxScore := 15
+	maxScore := 10
 	score := 0
 	recs := []string{}
 	status := "warning"

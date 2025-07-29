@@ -1,0 +1,14 @@
+{
+	"version": "2.0.0",
+	"tasks": [
+		{
+			"label": "Build GreenLight",
+			"type": "shell",
+			"command": "go build -o greenlight .",
+			"group": "build",
+			"problemMatcher": [
+				"$go"
+			]
+		}
+	]
+}
